@@ -1,10 +1,11 @@
 const axios = require('axios');
 const { FIELD_MAPPING, FIELD_ALIASES, OPERATOR_MAPPING } = require('./field-mapping');
+const config = require('./config');
 
 class OllamaIntegration {
-  constructor(ollamaUrl = 'http://localhost:11434') {
+  constructor(ollamaUrl = config.ollama.url) {
     this.ollamaUrl = ollamaUrl;
-    this.model = 'llama3.2:3b-instruct-fp16'; // Use available instruction model
+    this.model = config.ollama.model;
   }
 
   // Set the model to use
@@ -15,7 +16,9 @@ class OllamaIntegration {
   // Check if Ollama is available
   async isAvailable() {
     try {
-      const response = await axios.get(`${this.ollamaUrl}/api/tags`);
+      const response = await axios.get(`${this.ollamaUrl}/api/tags`, {
+        timeout: config.ollama.timeout
+      });
       return response.status === 200;
     } catch (error) {
       return false;
@@ -35,6 +38,8 @@ class OllamaIntegration {
           temperature: 0.1, // Low temperature for consistent output
           top_p: 0.9
         }
+      }, {
+        timeout: config.ollama.timeout
       });
 
       const generatedText = response.data.response;
@@ -62,6 +67,8 @@ class OllamaIntegration {
           temperature: 0.3, // Slightly higher temperature for more natural language
           top_p: 0.9
         }
+      }, {
+        timeout: config.ollama.timeout
       });
 
       return {
@@ -161,13 +168,13 @@ ANALYSIS RESULTS:
 - Match percentage: ${((matchedTransactions.length / totalTransactions) * 100).toFixed(1)}%
 
 FINANCIAL INSIGHTS:
-- Lowest matching amount: $${lowestAmount.toFixed(2)} at ${lowestTransaction?.merchant || 'Unknown'} on ${lowestTransaction?.timestamp || 'Unknown date'}
-- Highest matching amount: $${highestAmount.toFixed(2)} at ${highestTransaction?.merchant || 'Unknown'} on ${highestTransaction?.timestamp || 'Unknown date'}
-- Average amount: $${avgAmount.toFixed(2)}
+- Lowest matching amount: ${lowestAmount.toFixed(2)} at ${lowestTransaction?.merchant || 'Unknown'} on ${lowestTransaction?.timestamp || 'Unknown date'}
+- Highest matching amount: ${highestAmount.toFixed(2)} at ${highestTransaction?.merchant || 'Unknown'} on ${highestTransaction?.timestamp || 'Unknown date'}
+- Average amount: ${avgAmount.toFixed(2)}
 
 SAMPLE MATCHING TRANSACTIONS:
 ${transactionSummary.map((t, i) => 
-  `${i+1}. $${t.amount.toFixed(2)} at ${t.merchant} (${t.category}) in ${t.city}, ${t.state} on ${t.date}`
+  `${i+1}. ${t.amount.toFixed(2)} at ${t.merchant} (${t.category}) in ${t.city}, ${t.state} on ${t.date}`
 ).join('\n')}
 
 TASK: Generate a natural language summary that:
@@ -262,13 +269,15 @@ Provide only the summary, no additional text:`;
     const lowestTransaction = matchedTransactions.find(t => t.amt === lowestAmount);
     const highestTransaction = matchedTransactions.find(t => t.amt === highestAmount);
     
-    return `Found ${matchCount} transactions (${percentage}% of total) matching "${originalQuery}". The lowest amount was $${lowestAmount.toFixed(2)} at ${lowestTransaction.merchant}, and the highest was $${highestAmount.toFixed(2)} at ${highestTransaction.merchant}.`;
+    return `Found ${matchCount} transactions (${percentage}% of total) matching "${originalQuery}". The lowest amount was ${lowestAmount.toFixed(2)} at ${lowestTransaction.merchant}, and the highest was ${highestAmount.toFixed(2)} at ${highestTransaction.merchant}.`;
   }
 
   // Get available models from Ollama
   async getAvailableModels() {
     try {
-      const response = await axios.get(`${this.ollamaUrl}/api/tags`);
+      const response = await axios.get(`${this.ollamaUrl}/api/tags`, {
+        timeout: config.ollama.timeout
+      });
       return response.data.models || [];
     } catch (error) {
       console.error('Failed to get Ollama models:', error.message);
