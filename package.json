@@ -5,7 +5,9 @@
   "main": "index.js",
   "scripts": {
     "start": "node index.js",
-    "dev": "nodemon index.js"
+    "dev": "nodemon index.js",
+    "web": "node web-server.js",
+    "test": "jest"
   },
   "dependencies": {
     "json-rules-engine": "^6.5.0",
@@ -15,9 +17,10 @@
     "axios": "^1.6.0"
   },
   "devDependencies": {
-    "nodemon": "^3.0.1"
+    "nodemon": "^3.0.1",
+    "jest": "^29.0.0"
   },
   "keywords": ["rules-engine", "nlp", "json-rules", "transactions", "ollama"],
   "author": "",
   "license": "MIT"
-} 
+}
