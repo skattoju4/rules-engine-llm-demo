@@ -15,16 +15,9 @@ class RuleEngineService {
       // Load CSV data
       await this.csvProcessor.loadTransactions();
       
-      // Check if Ollama is available (required now)
+      // Check if Ollama is available (optional now)
       const ollamaAvailable = await this.ollama.isAvailable();
       console.log('Ollama available:', ollamaAvailable);
-      
-      if (!ollamaAvailable) {
-        return {
-          success: false,
-          error: 'Ollama is required but not available. Please ensure Ollama is running on http://localhost:11434 and the model is available.'
-        };
-      }
       
       this.isInitialized = true;
       return {
@@ -52,37 +45,67 @@ class RuleEngineService {
 
     console.log('\n=== Processing Natural Language Query ===');
     console.log('Query:', naturalLanguageQuery);
+    
+    const startTime = Date.now();
 
-    // Step 1: Generate JSON rule using Ollama (no fallback)
+    // Step 1: Try to generate JSON rule using Ollama first
     console.log('🤖 Generating JSON rule using Ollama...');
-    const ruleResult = await this.ollama.generateRule(naturalLanguageQuery);
+    let ruleResult = await this.ollama.generateRule(naturalLanguageQuery);
 
+    // If Ollama fails, fallback to regex parser
     if (!ruleResult.success) {
-      return {
-        success: false,
-        error: ruleResult.error,
-        helpMessage: 'Please ensure Ollama is running and try queries like: "show me transactions with amount less than 10" or "find transactions where category is food_dining"'
-      };
+      console.log('⚠️  Ollama not available, falling back to regex parser...');
+      const NaturalLanguageParser = require('./natural-language-parser');
+      const parser = new NaturalLanguageParser();
+      ruleResult = parser.parseQuery(naturalLanguageQuery);
+      
+      if (!ruleResult.success) {
+        return {
+          success: false,
+          error: ruleResult.error || 'Failed to generate rule with both Ollama and regex parser',
+          helpMessage: 'Please ensure Ollama is running or try simpler query formats like: "amount < 10" or "category is food_dining"'
+        };
+      }
+      ruleResult.source = 'regex';
+    } else {
+      ruleResult.source = 'ollama';
     }
 
-    console.log('✅ JSON rule generated successfully');
+    const ruleGenerationTime = Date.now() - startTime;
+    console.log(`✅ JSON rule generated successfully (source: ${ruleResult.source}, time: ${ruleGenerationTime}ms)`);
 
     // Step 2: Apply the rule to filter transactions
     console.log('🔍 Applying rule to transaction data...');
+    const filterStartTime = Date.now();
     const filteredTransactions = await this.applyRule(ruleResult.rule);
+    const filterTime = Date.now() - filterStartTime;
 
     // Step 3: Generate natural language summary
-    console.log('📝 Generating natural language summary...');
-    const summaryResult = await this.ollama.generateResultSummary(
-      naturalLanguageQuery, 
-      filteredTransactions, 
-      this.csvProcessor.getTransactions().length,
-      ruleResult.rule
-    );
+    let finalSummary = 'Summary generation failed.';
+    let summaryTime = 0;
+    if (ruleResult.source === 'ollama') {
+      console.log('📝 Generating natural language summary...');
+      const summaryStartTime = Date.now();
+      const summaryResult = await this.ollama.generateResultSummary(
+        naturalLanguageQuery, 
+        filteredTransactions, 
+        this.csvProcessor.getTransactions().length,
+        ruleResult.rule
+      );
+      summaryTime = Date.now() - summaryStartTime;
+      
+      finalSummary = summaryResult.success 
+        ? summaryResult.summary 
+        : summaryResult.fallbackSummary || 'Summary generation failed.';
+    } else {
+      // Generate simple fallback summary
+      const matchCount = filteredTransactions.length;
+      const totalTransactions = this.csvProcessor.getTransactions().length;
+      const percentage = ((matchCount / totalTransactions) * 100).toFixed(1);
+      finalSummary = `Found ${matchCount} transactions (${percentage}% of total) matching your query.`;
+    }
 
-    const finalSummary = summaryResult.success 
-      ? summaryResult.summary 
-      : summaryResult.fallbackSummary || 'Summary generation failed.';
+    const totalTime = Date.now() - startTime;
 
     return {
       success: true,
@@ -95,7 +118,13 @@ class RuleEngineService {
         matchPercentage: ((filteredTransactions.length / this.csvProcessor.getTransactions().length) * 100).toFixed(1)
       },
       summary: finalSummary,
-      source: 'ollama'
+      source: ruleResult.source,
+      performance: {
+        totalTime: totalTime,
+        ruleGenerationTime: ruleGenerationTime,
+        filterTime: filterTime,
+        summaryTime: summaryTime
+      }
     };
   }
 
@@ -140,7 +169,7 @@ class RuleEngineService {
     
     console.log(`\n📋 Original Query: "${result.query}"`);
     
-    console.log('\n🔧 Generated JSON Rule:');
+    console.log(`\n🔧 Generated JSON Rule (${result.source}):`);
     console.log(JSON.stringify(result.generatedRule, null, 2));
     
     console.log(`\n📊 Results Summary:`);
@@ -148,11 +177,22 @@ class RuleEngineService {
     console.log(`- Total Transactions: ${result.results.totalTransactions}`);
     console.log(`- Match Percentage: ${result.results.matchPercentage}%`);
     
+    // Show performance metrics if available
+    if (result.performance) {
+      console.log(`\n⚡ Performance:`);
+      console.log(`- Total Time: ${result.performance.totalTime}ms`);
+      console.log(`- Rule Generation: ${result.performance.ruleGenerationTime}ms`);
+      console.log(`- Filtering: ${result.performance.filterTime}ms`);
+      if (result.performance.summaryTime) {
+        console.log(`- Summary Generation: ${result.performance.summaryTime}ms`);
+      }
+    }
+    
     if (result.matchedTransactions.length > 0) {
       console.log('\n💳 Matched Transactions:');
       result.matchedTransactions.forEach((transaction, index) => {
         console.log(`\n${index + 1}. Transaction ID: ${transaction.transactionId}`);
-        console.log(`   Amount: $${transaction.amt.toFixed(2)}`);
+        console.log(`   Amount: ${transaction.amt.toFixed(2)}`);
         console.log(`   Merchant: ${transaction.merchant}`);
         console.log(`   Category: ${transaction.category}`);
         console.log(`   Date: ${transaction.timestamp}`);
