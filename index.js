@@ -2,6 +2,7 @@
 
 const RuleEngineService = require('./rule-engine-service');
 const path = require('path');
+const config = require('./config');
 
 async function main() {
   console.log('🚀 Natural Language Credit Card Transaction Rules Engine');
@@ -9,7 +10,7 @@ async function main() {
   console.log('🤖 Powered by Ollama LLM for Natural Language Processing\n');
 
   // Initialize the service
-  const csvPath = path.join(__dirname, 'data.csv');
+  const csvPath = path.join(__dirname, config.app.csvFilePath);
   const service = new RuleEngineService(csvPath);
 
   console.log('Initializing service...');
@@ -26,14 +27,21 @@ async function main() {
 
   console.log('✅ Service initialized successfully');
   console.log(`📊 Loaded ${initResult.transactionCount} transactions`);
-  console.log(`🤖 Ollama LLM ready for natural language processing\n`);
+  
+  if (initResult.ollamaAvailable) {
+    console.log('🤖 Ollama LLM ready for natural language processing');
+  } else {
+    console.log('⚠️  Ollama not available, using regex parser as fallback');
+  }
+  
+  console.log();
 
   // Show dataset overview
   console.log('📈 Dataset Overview:');
   const stats = service.getStatistics();
   console.log(`- Total transactions: ${stats.totalTransactions}`);
-  console.log(`- Amount range: $${stats.amountStats.min.toFixed(2)} - $${stats.amountStats.max.toFixed(2)}`);
-  console.log(`- Average amount: $${stats.amountStats.average.toFixed(2)}`);
+  console.log(`- Amount range: ${stats.amountStats.min.toFixed(2)} - ${stats.amountStats.max.toFixed(2)}`);
+  console.log(`- Average amount: ${stats.amountStats.average.toFixed(2)}`);
   console.log(`- Categories: ${stats.categories.slice(0, 5).join(', ')}...`);
   console.log(`- Fraud transactions: ${stats.fraudCount}\n`);
 
@@ -98,10 +106,10 @@ async function main() {
           const stats = service.getStatistics();
           console.log('\n📊 Dataset Information:');
           console.log(`- Total transactions: ${stats.totalTransactions}`);
-          console.log(`- Amount range: $${stats.amountStats.min} - $${stats.amountStats.max}`);
+          console.log(`- Amount range: ${stats.amountStats.min} - ${stats.amountStats.max}`);
           console.log(`- Categories: ${stats.categories.join(', ')}`);
-          console.log(`- Natural Language Processing: Enabled ✅`);
-          console.log(`- Ollama Integration: Active 🤖`);
+          console.log(`- Natural Language Processing: ${initResult.ollamaAvailable ? 'Enabled ✅' : 'Fallback Mode ⚠️'}`);
+          console.log(`- Ollama Integration: ${initResult.ollamaAvailable ? 'Active 🤖' : 'Unavailable'}`);
           console.log();
           askQuery();
           return;
