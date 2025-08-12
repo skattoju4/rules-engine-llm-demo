@@ -11,13 +11,15 @@ A natural language to JSON rules engine for filtering credit card transactions. 
 - **JSON Rules Engine Integration**: Generated rules work directly with json-rules-engine
 - **CSV Data Processing**: Loads and processes credit card transaction data
 - **Interactive CLI**: Test queries in real-time
+- **Web API**: HTTP API for programmatic access
 - **Comprehensive Field Mapping**: Maps CSV columns to meaningful field names
+- **Configurable**: Customize behavior through environment variables
 
 ## 📋 Requirements
 
 - Node.js 14+ 
 - npm or yarn
-- [Ollama](https://ollama.ai/) with Llama model for enhanced NLP
+- [Ollama](https://ollama.ai/) with Llama model for enhanced NLP (optional)
 
 ## 🛠️ Installation
 
@@ -32,11 +34,33 @@ cd credit-card-rules-demo
 npm install
 ```
 
-3. Install and set up Ollama:
+3. Install and set up Ollama (optional but recommended):
 ```bash
 # Install Ollama (visit https://ollama.ai/ for instructions)
 # Pull a model (e.g., Llama 3.2)
 ollama pull llama3.2
+```
+
+## ⚙️ Configuration
+
+The application can be configured through environment variables or by modifying `config.js`:
+
+| Environment Variable | Default Value | Description |
+|---------------------|---------------|-------------|
+| `OLLAMA_URL` | `http://localhost:11434` | Ollama API endpoint |
+| `OLLAMA_MODEL` | `llama3.2:3b-instruct-fp16` | Model to use for processing |
+| `OLLAMA_TIMEOUT` | `30000` | Request timeout in milliseconds |
+| `CSV_FILE_PATH` | `./data.csv` | Path to transaction data file |
+| `REQUIRE_OLLAMA` | `false` | Whether to require Ollama for initialization |
+| `FALLBACK_TO_REGEX` | `true` | Whether to fallback to regex parser if Ollama is unavailable |
+| `MAX_TRANSACTIONS` | `10000` | Maximum number of transactions to process |
+| `SHOW_METRICS` | `true` | Whether to display performance metrics |
+| `DEBUG` | `false` | Enable debug logging |
+| `PORT` | `3000` | Port for web API server |
+
+Example:
+```bash
+OLLAMA_MODEL=llama3.2:3b-instruct-fp16 PORT=8080 node web-server.js
 ```
 
 ## 📊 Data Format
@@ -54,7 +78,7 @@ The system expects CSV data with the following structure (your `data.csv`):
 
 ## 🚀 Usage
 
-### Basic Usage
+### CLI Mode
 
 ```bash
 node index.js
@@ -64,6 +88,19 @@ This will:
 1. Load your transaction data
 2. Run example queries
 3. Enter interactive mode for testing
+
+### Web API Mode
+
+```bash
+node web-server.js
+```
+
+Or with custom port:
+```bash
+PORT=8080 node web-server.js
+```
+
+The web API will be available at `http://localhost:3000` (or your specified port).
 
 ### Example Queries
 
@@ -106,6 +143,124 @@ async function example() {
 }
 ```
 
+## 🌐 Web API Endpoints
+
+### `GET /health`
+
+Health check endpoint.
+
+Response:
+```json
+{
+  "status": "ok",
+  "timestamp": "2023-01-01T00:00:00.000Z"
+}
+```
+
+### `GET /api/initialize`
+
+Initialize the rule engine service.
+
+Response:
+```json
+{
+  "success": true,
+  "message": "Rule engine service initialized successfully",
+  "ollamaAvailable": true,
+  "transactionCount": 1234
+}
+```
+
+### `POST /api/query`
+
+Process a natural language query.
+
+Request:
+```json
+{
+  "query": "show me transactions with amount less than 10"
+}
+```
+
+Response:
+```json
+{
+  "success": true,
+  "query": "show me transactions with amount less than 10",
+  "generatedRule": { /* JSON rule */ },
+  "matchedTransactions": [ /* matched transactions */ ],
+  "results": {
+    "matchCount": 42,
+    "totalTransactions": 1234,
+    "matchPercentage": "3.4"
+  },
+  "summary": "Found 42 transactions matching your query...",
+  "source": "ollama",
+  "performance": {
+    "totalTime": 1200,
+    "ruleGenerationTime": 1100,
+    "filterTime": 50,
+    "summaryTime": 50
+  }
+}
+```
+
+### `GET /api/stats`
+
+Get dataset statistics.
+
+Response:
+```json
+{
+  "totalTransactions": 1234,
+  "amountStats": {
+    "min": 1.23,
+    "max": 1234.56,
+    "average": 45.67
+  },
+  "uniqueCategories": 15,
+  "categories": ["food_dining", "travel", ...],
+  "uniqueMerchants": 842,
+  "merchants": ["Starbucks", "Walmart", ...],
+  "fraudCount": 23,
+  "ollamaRequired": false,
+  "naturalLanguageInputOutput": true
+}
+```
+
+### `GET /api/examples`
+
+Get example queries.
+
+Response:
+```json
+{
+  "examples": [
+    "show me transactions with amount less than 10",
+    "find transactions where category is food_dining",
+    // ...
+  ]
+}
+```
+
+### `POST /api/validate`
+
+Validate a JSON rule.
+
+Request:
+```json
+{
+  "rule": { /* JSON rule to validate */ }
+}
+```
+
+Response:
+```json
+{
+  "valid": true
+}
+```
+
 ## 🏗️ Architecture
 
 ### Components
@@ -116,6 +271,8 @@ async function example() {
 4. **`csv-processor.js`**: Loads and processes transaction data
 5. **`rule-engine-service.js`**: Main service coordinating all components
 6. **`index.js`**: CLI interface and demo runner
+7. **`web-api.js`**: Web API server
+8. **`config.js`**: Configuration settings
 
 ### Processing Flow
 
@@ -192,6 +349,11 @@ Run the built-in tests:
 const service = new RuleEngineService('./data.csv');
 await service.initialize();
 const testResults = await service.runTests();
+```
+
+Or run unit tests:
+```bash
+npm test
 ```
 
 ## 📚 API Reference
